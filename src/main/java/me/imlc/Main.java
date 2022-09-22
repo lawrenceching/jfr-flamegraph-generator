@@ -1,11 +1,19 @@
 package me.imlc;
 
+import java.util.Objects;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.openjdk.jmc.common.IDisplayable;
+import org.openjdk.jmc.common.item.IItem;
 import org.openjdk.jmc.common.item.IItemCollection;
+import org.openjdk.jmc.common.item.IItemIterable;
+import org.openjdk.jmc.common.item.IMemberAccessor;
+import org.openjdk.jmc.common.unit.IQuantity;
 import org.openjdk.jmc.common.util.FormatToolkit;
 import org.openjdk.jmc.flightrecorder.CouldNotLoadRecordingException;
+import org.openjdk.jmc.flightrecorder.JfrAttributes;
 import org.openjdk.jmc.flightrecorder.JfrLoaderToolkit;
+import org.openjdk.jmc.flightrecorder.jdk.JdkAttributes;
 import org.openjdk.jmc.flightrecorder.jdk.JdkFilters;
 import org.openjdk.jmc.flightrecorder.stacktrace.FrameSeparator;
 import org.openjdk.jmc.flightrecorder.stacktrace.tree.Node;
@@ -24,21 +32,49 @@ java -jar jfr-flamegraph-generator.jar --from [source jfr] --to [output html]
     --from: Path to your JFR file
     --to  : Path to flame graph that will be generated as HTML file""";
 
+    private static final String ANY_STRING = "ARG_ANY_STRING";
     public static void main(String[] args) throws InterruptedException, CouldNotLoadRecordingException, IOException {
 
-        if(args.length != 4) {
-            System.err.println("Invalid arguments");
+        var source = args[1];
+
+        IItemCollection collection = JfrLoaderToolkit.loadEvents(new File(source));
+        if(stringsEqual(args, "--from", ANY_STRING, "threaddump")) {
+            printThreads(args, collection);
+        } else if (stringsEqual(args, "--from", ANY_STRING, "--to", ANY_STRING)) {
+            generateFlameGraph(args, collection);
+        } else {
             System.out.println(HELP_MSG);
         }
+    }
 
+    private static boolean stringsEqual(String[] args, String ... expectedArgs) {
+        if(args.length != expectedArgs.length) {
+            return false;
+        }
+
+        for (int i = 0; i < args.length; i++) {
+
+            var expectedArg = expectedArgs[i];
+            if(expectedArg == ANY_STRING) {
+                continue;
+            }
+
+            if (!Objects.equals(args[i], expectedArg)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void generateFlameGraph(String[] args, IItemCollection collection)
+        throws IOException {
         var source = args[1];
         var output = args[3];
 
-        IItemCollection collection = JfrLoaderToolkit.loadEvents(new File(source));
-
         collection = collection.apply(JdkFilters.EXECUTION_SAMPLE);
         StacktraceTreeModel stacktraceTreeModel = new StacktraceTreeModel(collection,
-                new FrameSeparator(FrameSeparator.FrameCategorization.METHOD, false));
+            new FrameSeparator(FrameSeparator.FrameCategorization.METHOD, false));
 
         var node = stacktraceTreeModel.getRoot();
         var root = buildJsonObject(node);
@@ -69,6 +105,20 @@ java -jar jfr-flamegraph-generator.jar --from [source jfr] --to [output html]
                 """.formatted(root.toString(4)));
     }
 
+    private static void printThreads(String[] _args, IItemCollection collection) {
+        var threadCollection = collection.apply(JdkFilters.THREAD_DUMP);
+        for (IItemIterable itemIterable : threadCollection) {
+            IMemberAccessor<String, IItem> accessor = JdkAttributes.THREAD_DUMP_RESULT.getAccessor(
+                itemIterable.getType());
+            IMemberAccessor<IQuantity, IItem> stAccessor = JfrAttributes.END_TIME.getAccessor(itemIterable.getType());
+            for (IItem item : itemIterable) {
+                println("");
+                println("=== " + stAccessor.getMember(item).displayUsing(IDisplayable.AUTO) + " ===");
+                println("");
+                println(accessor.getMember(item));
+            }
+        }
+    }
     private static JSONObject buildJsonObject(Node node) {
         var obj = new JSONObject();
         var frame = node.getFrame();
@@ -88,4 +138,7 @@ java -jar jfr-flamegraph-generator.jar --from [source jfr] --to [output html]
         return obj;
     }
 
+    private static void println(String msg) {
+        System.out.println(msg);
+    }
 }

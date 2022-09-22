@@ -19,4 +19,16 @@ class MainTest {
                 }
         );
     }
+
+
+    @Test
+    void threaddump() throws CouldNotLoadRecordingException, IOException, InterruptedException {
+        Main.main(
+                new String[] {
+                        "--from",
+                        "native-image/jetty.jfr",
+                        "threaddump"
+                }
+        );
+    }
 }

@@ -17,6 +17,12 @@ java -jar jfr-flamegraph-generator.jar --from /path/to/your.jfr --to flamegraph.
 ./jfr-flamegraph-generator.exe # Windows
 ```
 
+##### ThreadDump
+
+```bash
+./jfr-flamegraph-generator --from /path/to/your.jfr threaddump
+```
+
 ### Build
 
 ##### Windows 10/11
